@@ -3,9 +3,14 @@ import os
 import sys
 from base64 import b64encode
 
-from playwright.sync_api import sync_playwright
+import requests
+from bs4 import BeautifulSoup
 
 BASE_URL = "http://www.routerlogin.net"
+CMD_MAPPING = {
+    "enable": "always",
+    "disable": "never",
+}
 
 
 def basic_auth(username, password):
@@ -14,32 +19,49 @@ def basic_auth(username, password):
     return f"Basic {token}"
 
 
-def find_element_by_attribute_value(page, role, attribute, value):
-    elements = page.get_by_role(role).all()
-    for element in elements:
-        attribute_value = element.get_attribute(attribute)
-        if attribute_value == value:
-            return element
+def get_session():
+    token = basic_auth(
+        os.environ.get("NETGEAR_USERNAME"), os.environ.get("NETGEAR_PASSWORD")
+    )
+    s = requests.sessions.Session()
+    _ = s.get(f"{BASE_URL}/start.htm")
+
+    s.headers.update(
+        {
+            "Authorization": token,
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+        }
+    )
+    return s
 
 
-def select_radio_element(page, value):
-    element = find_element_by_attribute_value(page, "radio", "value", value)
-    if element:
-        element.click()
-        logging.info(f"selected {value}")
+def get_form_action(s):
+    r = s.get(
+        f"{BASE_URL}/BKS_service.htm",
+    )
+    r.raise_for_status()
+
+    soup = BeautifulSoup(r.content, "html.parser")
+    form = soup.css.select("#target")
+    tag = form.pop()
+    action = tag.attrs.get("action")
+
+    return action
 
 
-def click_button(page, value):
-    element = find_element_by_attribute_value(page, "button", "value", value)
-    if element:
-        element.click()
-        logging.info(f"clicked {value}")
+def write_settings(s, form_action, value):
+    r = s.post(
+        f"{BASE_URL}/{form_action}",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data=f"apply=Apply&skeyword={value}&ruleSelect=0&select=-1",
+    )
+    r.raise_for_status()
 
 
 def main(args):
     if len(args) > 1:
-        command = args[1]
-        if command not in ["enable", "disable"]:
+        command = CMD_MAPPING.get(args[1])
+        if not command:
             logging.error(
                 "No input command provided. Should be either `enable` or `disable`"
             )
@@ -50,28 +72,9 @@ def main(args):
         )
         sys.exit(1)
 
-    with sync_playwright() as p:
-        token = basic_auth(
-            os.environ.get("NETGEAR_USERNAME"), os.environ.get("NETGEAR_PASSWORD")
-        )
-
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
-        page.goto(f"{BASE_URL}/start.htm")
-        context.set_extra_http_headers(
-            {
-                "Authorization": token,
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
-            }
-        )
-        page.goto(f"{BASE_URL}/BKS_service.htm")
-
-        if command == "enable":
-            select_radio_element(page, "always")
-        else:
-            select_radio_element(page, "never")
-        click_button(page, "Apply")
+    s = get_session()
+    form_action = get_form_action(s)
+    write_settings(s, form_action, command)
 
 
 if __name__ == "__main__":
