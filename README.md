@@ -16,5 +16,5 @@ Running the util.
 ./run.sh enable
 
 # to disable blocking of services
-./run.sh enable
+./run.sh disable
 ```
