@@ -7,7 +7,7 @@ It runs on linux and you can schedule `run.sh` using cron.
 
 Install by running the `install.sh` script.
 
-Set credentials as environment variables: `NETGEAR_USERNAME` and `NETGEAR_PASSWORD`
+Add the `NETGEAR_USERNAME` and `NETGEAR_PASSWORD` variables to a `.env` file.
 
 Running the util.
 
@@ -18,3 +18,9 @@ Running the util.
 # to disable blocking of services
 ./run.sh disable
 ```
+
+## Scheduling with crontab
+
+Below example will run the script on schedule and write all outputs to a log file.
+
+`0 17 * * 1,2,3,4,5 /home/user/netgear-automator/run.sh disable >> /home/user/netgear.log 2>&1`
